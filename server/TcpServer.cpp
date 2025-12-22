@@ -1,0 +1,221 @@
+#include "TcpServer.h"
+#include <iostream>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <cstring>
+#include <ctime>
+
+using namespace std;
+
+// 构造函数：初始化 Socket
+TcpServer::TcpServer() : _running(false), _idCounter(100) {
+    // 1. 创建 Socket
+    _listenSock = socket(AF_INET, SOCK_STREAM, 0);
+    if (_listenSock == -1) {
+        perror("Socket create failed");
+        exit(1);
+    }
+
+    // 2. 设置端口复用 (防止重启时端口被占用)
+    int opt = 1;
+    setsockopt(_listenSock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    // 3. 绑定端口
+    sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY; // 监听所有网卡
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    if (bind(_listenSock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Bind failed");
+        exit(1);
+    }
+
+    // 4. 开始监听
+    if (listen(_listenSock, 10) < 0) {
+        perror("Listen failed");
+        exit(1);
+    }
+}
+
+TcpServer::~TcpServer() {
+    close(_listenSock);
+}
+
+// 主循环：只负责 Accept 新连接
+void TcpServer::start() {
+    _running = true;
+    cout << "[Server] Listening on port " << SERVER_PORT << "..." << endl;
+
+    while (_running) {
+        sockaddr_in clientAddr;
+        socklen_t len = sizeof(clientAddr);
+        
+        // 阻塞等待连接
+        int clientSock = accept(_listenSock, (struct sockaddr*)&clientAddr, &len);
+        if (clientSock < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        // 分配 ID 并记录
+        int newId = _idCounter++; // ID 自增
+        
+        // 加锁操作 Map
+        {
+            lock_guard<mutex> lock(_mtx);
+            ClientNode node;
+            node.socket = clientSock;
+            node.addr = clientAddr;
+            node.id = newId;
+            _clients[newId] = node;
+        }
+
+        cout << "[Server] New Client connected. ID: " << newId 
+             << " IP: " << inet_ntoa(clientAddr.sin_addr) << endl;
+
+        // 启动子线程处理该客户端
+        // 【注意】使用 std::thread 替代 pthread，这是 C++11 特性，也是加分项
+        std::thread t(&TcpServer::workerThread, this, clientSock, clientAddr, newId);
+        t.detach(); // 分离线程，让它独立运行
+    }
+}
+
+// 工作线程：接收数据并解析
+void TcpServer::workerThread(int clientSock, sockaddr_in addr, int clientId) {
+    char buffer[BUF_SIZE];
+    
+    // 发送欢迎消息 (可选，确认连接成功)
+    // sendMsg(clientSock, 'M', "Welcome to Chat Server!");
+
+    while (true) {
+        memset(buffer, 0, BUF_SIZE);
+        // 阻塞接收
+        int bytesRead = recv(clientSock, buffer, BUF_SIZE - 1, 0);
+        
+        // 客户端断开或出错
+        if (bytesRead <= 0) {
+            cout << "[Server] Client " << clientId << " disconnected." << endl;
+            close(clientSock);
+            
+            // 从列表中移除
+            lock_guard<mutex> lock(_mtx);
+            _clients.erase(clientId);
+            break;
+        }
+
+        // 解析协议
+        std::string rawData(buffer);
+        NetMsg msg;
+        if (NetMsg::decode(rawData, msg)) {
+            // 解析成功，分发处理
+            dispatchMessage(clientSock, msg, clientId);
+        } else {
+            // 解析失败（可能是非协议包），忽略或打印
+            // cout << "[Warning] Invalid packet from " << clientId << endl;
+        }
+    }
+}
+
+// 消息分发器
+void TcpServer::dispatchMessage(int sock, NetMsg& msg, int clientId) {
+    char type = msg.getType();
+    
+    switch (type) {
+        case 'T': // Time Request
+            handleTimeReq(sock);
+            break;
+        case 'N': // Name Request
+            handleNameReq(sock);
+            break;
+        case 'L': // List Request
+            handleListReq(sock, clientId); // 【修改】传入 clientId
+            break;
+        case 'S': // Send Message (Forward)
+            handleForwardReq(sock, clientId, msg.getTargetId(), msg.getContent());
+            break;
+        case 'D': // Disconnect
+            // 实际上 recv 返回 0 会自动处理断开，这里可以是主动退出的命令
+            break;
+        default:
+            cout << "[Server] Unknown request type: " << type << endl;
+            break;
+    }
+}
+
+// 1. 处理时间
+void TcpServer::handleTimeReq(int sock) {
+    time_t now = time(0);
+    tm* ltm = localtime(&now);
+    char buf[64];
+    // 自定义格式: 2023-10-01 12:00:00
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ltm);
+    
+    sendMsg(sock, 'T', std::string(buf));
+}
+
+// 2. 处理名字
+void TcpServer::handleNameReq(int sock) {
+    char hostname[128];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        strcpy(hostname, "Server-Unknown");
+    }
+    sendMsg(sock, 'N', std::string(hostname));
+}
+
+// 3. 处理列表
+// 【修改】增加参数 int clientId
+void TcpServer::handleListReq(int sock, int clientId) {
+    std::string listStr = "\n=== Online Clients ===\n";
+    
+    lock_guard<mutex> lock(_mtx);
+    for (auto& pair : _clients) {
+        ClientNode& node = pair.second;
+        listStr += "ID: " + to_string(node.id) + 
+                   " | IP: " + inet_ntoa(node.addr.sin_addr) + 
+                   " | Port: " + to_string(ntohs(node.addr.sin_port));
+        
+        // 【修改】直接比较 node.id 和传入的 clientId
+        if (node.id == clientId) { 
+             listStr += " (You)";
+        }
+        listStr += "\n";
+    }
+    listStr += "======================\n";
+    
+    sendMsg(sock, 'L', listStr);
+}
+
+// 4. 处理转发
+void TcpServer::handleForwardReq(int sock, int sourceId, int targetId, std::string content) {
+    lock_guard<mutex> lock(_mtx);
+    
+    // 查找目标是否存在
+    if (_clients.find(targetId) != _clients.end()) {
+        int targetSock = _clients[targetId].socket;
+        
+        // 组装消息: [来自 ID:101] 你好
+        std::string forwardContent = "[From " + to_string(sourceId) + "]: " + content;
+        
+        // 发送给目标，类型还是 'S' (或者你可以定义一个新的 'M' Message)
+        // 这里为了简单，复用 'S' 类型，客户端收到 'S' 就直接显示内容
+        // 注意：NetMsg 的 targetId 字段此时可以填 sourceId，方便对方知道是谁发的
+        NetMsg msg('S', forwardContent, sourceId); 
+        std::string packet = msg.encode();
+        send(targetSock, packet.c_str(), packet.length(), 0);
+        
+        // 告诉发送者：发送成功
+        // sendMsg(sock, 'R', "Message sent to " + to_string(targetId));
+    } else {
+        // 目标不存在，通知发送者
+        sendMsg(sock, 'S', "[System] Error: Client " + to_string(targetId) + " not found.");
+    }
+}
+
+// 辅助发送
+void TcpServer::sendMsg(int sock, char type, std::string content, int targetId) {
+    NetMsg msg(type, content, targetId);
+    std::string packet = msg.encode();
+    send(sock, packet.c_str(), packet.length(), 0);
+}
