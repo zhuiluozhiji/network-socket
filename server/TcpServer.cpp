@@ -219,3 +219,4 @@ void TcpServer::sendMsg(int sock, char type, std::string content, int targetId) 
     std::string packet = msg.encode();
     send(sock, packet.c_str(), packet.length(), 0);
 }
+//
