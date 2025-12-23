@@ -87,7 +87,7 @@ void TcpServer::start() {
 
 void TcpServer::workerThread(int clientSock, sockaddr_in addr, int clientId) {
     char buffer[BUF_SIZE];
-    std::string msgBuffer = ""; // 【新增】持久化缓冲区，用于处理粘包
+    std::string msgBuffer = ""; // 持久化缓冲区，用于处理粘包
 
     while (true) {
         memset(buffer, 0, BUF_SIZE);
@@ -105,7 +105,7 @@ void TcpServer::workerThread(int clientSock, sockaddr_in addr, int clientId) {
             break;
         }
 
-        // 【核心修改】将收到的数据追加到缓冲区
+        // 将收到的数据追加到缓冲区
         msgBuffer += buffer;
 
         // 循环处理缓冲区中所有完整的包（以 \n 结尾）
@@ -151,7 +151,6 @@ void TcpServer::dispatchMessage(int sock, NetMsg& msg, int clientId) {
     }
 }
 
-// 1. 处理时间
 // 1. 处理时间
 void TcpServer::handleTimeReq(int sock, int clientId) {
     time_t now = time(0);

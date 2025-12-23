@@ -105,7 +105,7 @@ void AppClient::disconnect() {
 
 void AppClient::recvLoop() {
     char buffer[2048];
-    std::string msgBuffer = ""; // 【新增】持久化缓冲区
+    std::string msgBuffer = ""; // 【added】持久化缓冲区
 
     while (_connected) {
         memset(buffer, 0, sizeof(buffer));
@@ -121,7 +121,7 @@ void AppClient::recvLoop() {
             break;
         }
 
-        // 【核心修改】追加数据并循环切割
+        // 修改：追加数据并循环切割
         msgBuffer += buffer;
 
         size_t pos;
