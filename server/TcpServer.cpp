@@ -181,30 +181,54 @@ void TcpServer::handleNameReq(int sock, int clientId) {
 // 3. 处理列表
 // 【修改】增加参数 int clientId
 // 3. 处理列表
+// 3. 处理列表
 void TcpServer::handleListReq(int sock, int clientId) {
-    // 【新增日志】
-    cout << "[Server] Client " << clientId << " requested Client List." << endl;
+    // 【日志 1】打印请求头
+    // 格式：[1]handle request..
+    cout << "[Server] " <<  "Client [" << clientId << "] Get Client List.." << endl;
+    //cout << "send messsage:" << endl;
 
-    std::string listStr = "=== Online Clients === "; 
+    std::string totalPackets = "";
+    
+    // 1. 封装列表标题包 (作为第一行)
+    NetMsg titleMsg('L', "=== Online Clients ===");
+    totalPackets += titleMsg.encode();
+
     lock_guard<mutex> lock(_mtx);
     for (auto& pair : _clients) {
         ClientNode& node = pair.second;
-        listStr += "[ID:" + to_string(node.id) + 
-                   " " + inet_ntoa(node.addr.sin_addr) + 
-                   ":" + to_string(ntohs(node.addr.sin_port));
-        if (node.id == clientId) listStr += "(You)";
-        listStr += "] ";
+        
+        // 【日志 2】打印每个客户端的详细信息
+        // 格式：id1:[127.0.0.1 37626]
+        cout << "id" << node.id << ":[" 
+             << inet_ntoa(node.addr.sin_addr) << " " 
+             << ntohs(node.addr.sin_port) << "]" << endl;
+
+        // 2. 封装单个客户端信息包 (作为后续的行)
+        // 格式：[ID:100 127.0.0.1:16376(You)]
+        string clientInfo = "[ID:" + to_string(node.id) + " " + 
+                            inet_ntoa(node.addr.sin_addr) + ":" + 
+                            to_string(ntohs(node.addr.sin_port));
+        
+        if (node.id == clientId) {
+             clientInfo += "(You)";
+        }
+        clientInfo += "]";
+        
+        // 编码并追加到发送缓冲区
+        NetMsg clientMsg('L', clientInfo);
+        totalPackets += clientMsg.encode();
     }
     
-    sendMsg(sock, 'L', listStr);
+    // 3. 一次性发送所有包 (客户端 recvLoop 会自动循环处理这些 \n 分隔的包)
+    send(sock, totalPackets.c_str(), totalPackets.length(), 0);
 }
-
 // 4. 处理转发
 // 4. 处理转发
 void TcpServer::handleForwardReq(int sock, int sourceId, int targetId, std::string content) {
     // 【日志 1】收到请求
     // 格式：[1]handle request..
-    cout << "[" << sourceId << "]handle request.." << endl;
+    cout << "[Server] " << "Client [" << sourceId << "] handle sending request.." << endl;
 
     lock_guard<mutex> lock(_mtx);
     
