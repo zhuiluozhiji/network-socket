@@ -131,10 +131,10 @@ void TcpServer::dispatchMessage(int sock, NetMsg& msg, int clientId) {
     
     switch (type) {
         case 'T': // Time Request
-            handleTimeReq(sock);
+            handleTimeReq(sock, clientId); // 传入 clientId
             break;
         case 'N': // Name Request
-            handleNameReq(sock);
+            handleNameReq(sock, clientId); // 传入 clientId
             break;
         case 'L': // List Request
             handleListReq(sock, clientId); // 【修改】传入 clientId
@@ -152,50 +152,58 @@ void TcpServer::dispatchMessage(int sock, NetMsg& msg, int clientId) {
 }
 
 // 1. 处理时间
-void TcpServer::handleTimeReq(int sock) {
+// 1. 处理时间
+void TcpServer::handleTimeReq(int sock, int clientId) {
     time_t now = time(0);
     tm* ltm = localtime(&now);
     char buf[64];
-    // 自定义格式: 2023-10-01 12:00:00
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ltm);
+    
+    // 【新增日志】
+    cout << "[Server] Client " << clientId << " requested Time. Sending: " << buf << endl;
     
     sendMsg(sock, 'T', std::string(buf));
 }
 
 // 2. 处理名字
-void TcpServer::handleNameReq(int sock) {
+// 2. 处理名字
+void TcpServer::handleNameReq(int sock, int clientId) {
     char hostname[128];
     if (gethostname(hostname, sizeof(hostname)) != 0) {
         strcpy(hostname, "Server-Unknown");
     }
+
+    // 【新增日志】
+    cout << "[Server] Client " << clientId << " requested Name. Sending: " << hostname << endl;
+
     sendMsg(sock, 'N', std::string(hostname));
 }
 
 // 3. 处理列表
 // 【修改】增加参数 int clientId
+// 3. 处理列表
 void TcpServer::handleListReq(int sock, int clientId) {
-    std::string listStr = "\n=== Online Clients ===\n";
-    
+    // 【新增日志】
+    cout << "[Server] Client " << clientId << " requested Client List." << endl;
+
+    std::string listStr = "=== Online Clients === "; 
     lock_guard<mutex> lock(_mtx);
     for (auto& pair : _clients) {
         ClientNode& node = pair.second;
-        listStr += "ID: " + to_string(node.id) + 
-                   " | IP: " + inet_ntoa(node.addr.sin_addr) + 
-                   " | Port: " + to_string(ntohs(node.addr.sin_port));
-        
-        // 【修改】直接比较 node.id 和传入的 clientId
-        if (node.id == clientId) { 
-             listStr += " (You)";
-        }
-        listStr += "\n";
+        listStr += "[ID:" + to_string(node.id) + 
+                   " " + inet_ntoa(node.addr.sin_addr) + 
+                   ":" + to_string(ntohs(node.addr.sin_port));
+        if (node.id == clientId) listStr += "(You)";
+        listStr += "] ";
     }
-    listStr += "======================\n";
     
     sendMsg(sock, 'L', listStr);
 }
 
 // 4. 处理转发
 void TcpServer::handleForwardReq(int sock, int sourceId, int targetId, std::string content) {
+    // 【新增日志】
+    cout << "[Server] Client " << sourceId << " wants to send message to " << targetId << endl;
     lock_guard<mutex> lock(_mtx);
     
     // 查找目标是否存在

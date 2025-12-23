@@ -169,7 +169,7 @@ void AppClient::handleInput(int choice) {
             int port;
             cout << "Enter Server IP (e.g. 127.0.0.1): ";
             cin >> ip;
-            cout << "Enter Server Port (e.g. 8888): ";
+            cout << "Enter Server Port (e.g.学号后四位): ";
             cin >> port;
             connectServer(ip, port);
         } else {
@@ -183,21 +183,21 @@ void AppClient::handleInput(int choice) {
         case 1:
             cout << "Already connected." << endl;
             break;
-        // case 2: // 获取时间
-        //     sendRequest('T');
-        //     break;
-        case 2: // 获取时间 - 【临时修改用于压力测试】
-        {
-            cout << "Starting Stress Test (100 requests)..." << endl;
-            // 循环发送 100 次
-            for (int i = 0; i < 100; i++) {
-                sendRequest('T');
-                // 可选：极短的延时模拟真实高频但非瞬时的请求，或者注释掉测试极限粘包
-                // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
-            }
-            cout << "Sent 100 requests." << endl;
+        case 2: // 获取时间
+            sendRequest('T');
             break;
-        }
+        // case 2: // 获取时间 - 【临时修改用于压力测试】
+        // {
+        //     cout << "Starting Stress Test (100 requests)..." << endl;
+        //     // 循环发送 100 次
+        //     for (int i = 0; i < 100; i++) {
+        //         sendRequest('T');
+        //         // 可选：极短的延时模拟真实高频但非瞬时的请求，或者注释掉测试极限粘包
+        //         // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
+        //     }
+        //     cout << "Sent 100 requests." << endl;
+        //     break;
+        // }
         case 3: // 获取名字
             sendRequest('N');
             break;

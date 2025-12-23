@@ -6,7 +6,7 @@
 #include <vector>
 #include <sstream>
 
-// 【防查重】自定义协议标志和分隔符
+
 // 协议格式：HEAD | type | targetId | payload
 // 例如：LAB_PROTO|T|0|
 #define MSG_HEAD "LAB_PROTO"
@@ -31,8 +31,8 @@ public:
     int getTargetId() const { return _targetId; }
     std::string getContent() const { return _payload; }
 
-// 【核心】序列化：将对象打包成字符串
-    // 格式: LAB_PROTO|type|targetId|content\n  <-- 注意这里多了个换行符
+// 序列化：将对象打包成字符串
+    // 格式: LAB_PROTO|type|targetId|content\n  <-- 注意换行符
     std::string encode() {
         return std::string(MSG_HEAD) + DELIMITER + 
                _type + DELIMITER + 

@@ -9,7 +9,7 @@
 #include "../common/NetMsg.h"
 
 // 服务器监听端口
-#define SERVER_PORT 8888 
+#define SERVER_PORT 6241 // 监听端口为学号后四位
 #define BUF_SIZE 2048
 
 // 定义一个结构体来保存客户端信息
@@ -48,10 +48,10 @@ private:
     // --- 具体业务逻辑 ---
     
     // 1. 处理时间请求
-    void handleTimeReq(int sock);
+    void handleTimeReq(int sock, int clientId);
     
     // 2. 处理名字请求
-    void handleNameReq(int sock);
+    void handleNameReq(int sock, int clientId);
     
     // 3. 处理列表请求
     void handleListReq(int sock, int clientId);
