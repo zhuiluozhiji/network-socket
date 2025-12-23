@@ -211,9 +211,11 @@ void AppClient::handleInput(int choice) {
             cout << "Enter Target Client ID (Check List first): ";
             cin >> targetId;
             
+            // 【关键修改】增加这一行，清除输入数字后残留的换行符
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
+            
             cout << "Enter Message: ";
-            // 清理缓冲区残留的换行符，确保 getline 能读到内容
-            // cin.ignore(); // 上面 run() 里已经 ignore 过了，这里直接 getline
+            // 之前的注释有误导性，这里必须清理完 buffer 才能 getline
             getline(cin, content);
             
             if (!content.empty()) {

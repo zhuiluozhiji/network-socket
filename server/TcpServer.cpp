@@ -201,29 +201,37 @@ void TcpServer::handleListReq(int sock, int clientId) {
 }
 
 // 4. 处理转发
+// 4. 处理转发
 void TcpServer::handleForwardReq(int sock, int sourceId, int targetId, std::string content) {
-    // 【新增日志】
-    cout << "[Server] Client " << sourceId << " wants to send message to " << targetId << endl;
+    // 【日志 1】收到请求
+    // 格式：[1]handle request..
+    cout << "[" << sourceId << "]handle request.." << endl;
+
     lock_guard<mutex> lock(_mtx);
     
     // 查找目标是否存在
     if (_clients.find(targetId) != _clients.end()) {
         int targetSock = _clients[targetId].socket;
         
+        // 【日志 2】准备发送
+        // 格式：send messsage to [2]:From [l]: hello
+        cout << "send messsage to [" << targetId << "]:From [" << sourceId << "]: " << content << endl;
+        
         // 组装消息: [来自 ID:101] 你好
         std::string forwardContent = "[From " + to_string(sourceId) + "]: " + content;
         
-        // 发送给目标，类型还是 'S' (或者你可以定义一个新的 'M' Message)
-        // 这里为了简单，复用 'S' 类型，客户端收到 'S' 就直接显示内容
-        // 注意：NetMsg 的 targetId 字段此时可以填 sourceId，方便对方知道是谁发的
+        // 复用 'S' 类型，TargetId 填 sourceId 告知接收方是谁发的
         NetMsg msg('S', forwardContent, sourceId); 
         std::string packet = msg.encode();
         send(targetSock, packet.c_str(), packet.length(), 0);
         
-        // 告诉发送者：发送成功
-        // sendMsg(sock, 'R', "Message sent to " + to_string(targetId));
+        // 【日志 3】发送成功
+        // 格式：send messsage:already send the message!
+        cout << "send messsage:already send the message!" << endl;
+
     } else {
-        // 目标不存在，通知发送者
+        // 目标不存在的日志
+        cout << "[Server] Error: Target " << targetId << " not found." << endl;
         sendMsg(sock, 'S', "[System] Error: Client " + to_string(targetId) + " not found.");
     }
 }
