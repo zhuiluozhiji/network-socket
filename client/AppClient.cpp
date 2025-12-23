@@ -145,6 +145,7 @@ void AppClient::recvLoop() {
         }
     }
 }
+//
 
 void AppClient::showMenu() {
     if (!_connected) {
