@@ -31,13 +31,13 @@ public:
     int getTargetId() const { return _targetId; }
     std::string getContent() const { return _payload; }
 
-    // 【核心】序列化：将对象打包成字符串
-    // 格式: LAB_PROTO|type|targetId|content
+// 【核心】序列化：将对象打包成字符串
+    // 格式: LAB_PROTO|type|targetId|content\n  <-- 注意这里多了个换行符
     std::string encode() {
         return std::string(MSG_HEAD) + DELIMITER + 
                _type + DELIMITER + 
                std::to_string(_targetId) + DELIMITER + 
-               _payload;
+               _payload + "\n"; // 【修改】增加 "\n" 作为包结束标记
     }
 
     // 【核心】反序列化：解析字符串到对象

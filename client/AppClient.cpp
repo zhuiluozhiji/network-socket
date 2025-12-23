@@ -101,14 +101,18 @@ void AppClient::disconnect() {
 }
 
 // 接收线程循环
+// 在 client/AppClient.cpp 中替换 recvLoop 函数
+
 void AppClient::recvLoop() {
     char buffer[2048];
+    std::string msgBuffer = ""; // 【新增】持久化缓冲区
+
     while (_connected) {
         memset(buffer, 0, sizeof(buffer));
         int bytesRead = recv(_sock, buffer, sizeof(buffer) - 1, 0);
         
         if (bytesRead <= 0) {
-            if (_connected) { // 如果不是主动断开引发的
+            if (_connected) { 
                 cout << "\n[Error] Server disconnected." << endl;
                 _connected = false;
                 close(_sock);
@@ -117,24 +121,27 @@ void AppClient::recvLoop() {
             break;
         }
 
-        // 反序列化解析消息
-        std::string raw(buffer);
-        NetMsg msg;
-        if (NetMsg::decode(raw, msg)) {
-            // 根据消息类型显示不同内容
-            if (msg.getType() == 'S') {
-                // 收到转发的消息
-                cout << "\n>>> [New Message] " << msg.getContent() << endl;
-            } else if (msg.getType() == 'L') {
-                // 收到列表
-                cout << "\n" << msg.getContent() << endl;
-            } else {
-                // 其他普通响应 (时间、名字等)
-                cout << "\n>>> [Server Response]: " << msg.getContent() << endl;
+        // 【核心修改】追加数据并循环切割
+        msgBuffer += buffer;
+
+        size_t pos;
+        while ((pos = msgBuffer.find('\n')) != std::string::npos) {
+            std::string raw = msgBuffer.substr(0, pos);
+            msgBuffer.erase(0, pos + 1);
+
+            NetMsg msg;
+            if (NetMsg::decode(raw, msg)) {
+                // 根据消息类型显示不同内容
+                if (msg.getType() == 'S') {
+                    cout << "\n>>> [New Message] " << msg.getContent() << endl;
+                } else if (msg.getType() == 'L') {
+                    cout << "\n" << msg.getContent() << endl;
+                } else {
+                    cout << "\n>>> [Server Response]: " << msg.getContent() << endl;
+                }
+                cout << ">>> "; 
+                flush(cout);
             }
-            // 重新打印提示符
-            cout << ">>> "; 
-            flush(cout);
         }
     }
 }
@@ -176,9 +183,21 @@ void AppClient::handleInput(int choice) {
         case 1:
             cout << "Already connected." << endl;
             break;
-        case 2: // 获取时间
-            sendRequest('T');
+        // case 2: // 获取时间
+        //     sendRequest('T');
+        //     break;
+        case 2: // 获取时间 - 【临时修改用于压力测试】
+        {
+            cout << "Starting Stress Test (100 requests)..." << endl;
+            // 循环发送 100 次
+            for (int i = 0; i < 100; i++) {
+                sendRequest('T');
+                // 可选：极短的延时模拟真实高频但非瞬时的请求，或者注释掉测试极限粘包
+                // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
+            }
+            cout << "Sent 100 requests." << endl;
             break;
+        }
         case 3: // 获取名字
             sendRequest('N');
             break;

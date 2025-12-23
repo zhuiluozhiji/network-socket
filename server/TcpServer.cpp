@@ -83,11 +83,11 @@ void TcpServer::start() {
 }
 
 // 工作线程：接收数据并解析
+// 在 server/TcpServer.cpp 中替换 workerThread 函数
+
 void TcpServer::workerThread(int clientSock, sockaddr_in addr, int clientId) {
     char buffer[BUF_SIZE];
-    
-    // 发送欢迎消息 (可选，确认连接成功)
-    // sendMsg(clientSock, 'M', "Welcome to Chat Server!");
+    std::string msgBuffer = ""; // 【新增】持久化缓冲区，用于处理粘包
 
     while (true) {
         memset(buffer, 0, BUF_SIZE);
@@ -105,15 +105,22 @@ void TcpServer::workerThread(int clientSock, sockaddr_in addr, int clientId) {
             break;
         }
 
-        // 解析协议
-        std::string rawData(buffer);
-        NetMsg msg;
-        if (NetMsg::decode(rawData, msg)) {
-            // 解析成功，分发处理
-            dispatchMessage(clientSock, msg, clientId);
-        } else {
-            // 解析失败（可能是非协议包），忽略或打印
-            // cout << "[Warning] Invalid packet from " << clientId << endl;
+        // 【核心修改】将收到的数据追加到缓冲区
+        msgBuffer += buffer;
+
+        // 循环处理缓冲区中所有完整的包（以 \n 结尾）
+        size_t pos;
+        while ((pos = msgBuffer.find('\n')) != std::string::npos) {
+            // 提取第一条完整消息（不含 \n）
+            std::string singlePacket = msgBuffer.substr(0, pos);
+            // 从缓冲区移除已处理的部分（含 \n）
+            msgBuffer.erase(0, pos + 1);
+
+            // 解析并分发
+            NetMsg msg;
+            if (NetMsg::decode(singlePacket, msg)) {
+                dispatchMessage(clientSock, msg, clientId);
+            }
         }
     }
 }
