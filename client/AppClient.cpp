@@ -5,6 +5,9 @@
 #include <cstring>
 #include <limits> // 用于清理输入缓冲区
 
+// 【Bonus 修改】用于统计收到的时间响应个数
+static int g_timeRespCount = 0;
+
 using namespace std;
 
 // 构造函数
@@ -103,11 +106,58 @@ void AppClient::disconnect() {
 // 接收线程循环
 // 在 client/AppClient.cpp 中替换 recvLoop 函数
 
+// void AppClient::recvLoop() {
+//     char buffer[2048];
+//     std::string msgBuffer = ""; // 【added】持久化缓冲区
+
+//     while (_connected) {
+//         memset(buffer, 0, sizeof(buffer));
+//         int bytesRead = recv(_sock, buffer, sizeof(buffer) - 1, 0);
+        
+//         if (bytesRead <= 0) {
+//             if (_connected) { 
+//                 cout << "\n[Error] Server disconnected." << endl;
+//                 _connected = false;
+//                 close(_sock);
+//                 _sock = -1;
+//             }
+//             break;
+//         }
+
+//         // 修改：追加数据并循环切割
+//         msgBuffer += buffer;
+
+//         size_t pos;
+//         while ((pos = msgBuffer.find('\n')) != std::string::npos) {
+//             std::string raw = msgBuffer.substr(0, pos);
+//             msgBuffer.erase(0, pos + 1);
+
+//             NetMsg msg;
+//             if (NetMsg::decode(raw, msg)) {
+//                 // 根据消息类型显示不同内容
+//                 if (msg.getType() == 'S') {
+//                     cout << "\n>>> [New Message] " << msg.getContent() << endl;
+//                 } else if (msg.getType() == 'L') {
+//                     cout << "\n" << msg.getContent() << endl;
+//                 } else {
+//                     cout << "\n>>> [Server Response]: " << msg.getContent() << endl;
+//                 }
+//                 cout << ">>> "; 
+//                 flush(cout);
+//             }
+//         }
+//     }
+// }
+
+// bonus部分
+
+// 接收线程循环：负责后台接收服务器消息
 void AppClient::recvLoop() {
     char buffer[2048];
-    std::string msgBuffer = ""; // 【added】持久化缓冲区
+    std::string msgBuffer = ""; // 持久化缓冲区，用于解决粘包
 
     while (_connected) {
+        // 1. 阻塞等待接收数据
         memset(buffer, 0, sizeof(buffer));
         int bytesRead = recv(_sock, buffer, sizeof(buffer) - 1, 0);
         
@@ -121,31 +171,48 @@ void AppClient::recvLoop() {
             break;
         }
 
-        // 修改：追加数据并循环切割
+        // 2. 将新数据追加到缓冲区
         msgBuffer += buffer;
 
+        // 3. 循环切割处理完整的数据包（以 \n 为界）
         size_t pos;
         while ((pos = msgBuffer.find('\n')) != std::string::npos) {
             std::string raw = msgBuffer.substr(0, pos);
-            msgBuffer.erase(0, pos + 1);
+            msgBuffer.erase(0, pos + 1); // 移除已处理部分
 
+            // 4. 反序列化并显示
             NetMsg msg;
             if (NetMsg::decode(raw, msg)) {
                 // 根据消息类型显示不同内容
-                if (msg.getType() == 'S') {
+                if (msg.getType() == 'T') {
+                    // 【Bonus 修改】计数并显示
+                    g_timeRespCount++;
+                    cout << "\n>>> [Response " << g_timeRespCount << "/100]: " << msg.getContent() << endl;
+                    
+                    if (g_timeRespCount == 100) {
+                         cout << ">>> [Success] All 100 responses received!" << endl;
+                    }
+                } 
+                else if (msg.getType() == 'S') {
+                    // 处理转发消息
                     cout << "\n>>> [New Message] " << msg.getContent() << endl;
-                } else if (msg.getType() == 'L') {
+                } 
+                else if (msg.getType() == 'L') {
+                    // 处理列表消息（直接打印，不加额外前缀，因为内容里已经格式化好了）
                     cout << "\n" << msg.getContent() << endl;
-                } else {
+                } 
+                else {
+                    // 其他类型（如 'N' 名字响应）
                     cout << "\n>>> [Server Response]: " << msg.getContent() << endl;
                 }
+
+                // 恢复提示符
                 cout << ">>> "; 
                 flush(cout);
             }
         }
     }
 }
-//
 
 void AppClient::showMenu() {
     if (!_connected) {
@@ -184,21 +251,24 @@ void AppClient::handleInput(int choice) {
         case 1:
             cout << "Already connected." << endl;
             break;
-        case 2: // 获取时间
-            sendRequest('T');
-            break;
-        // case 2: // 获取时间 - 【临时修改用于压力测试】
-        // {
-        //     cout << "Starting Stress Test (100 requests)..." << endl;
-        //     // 循环发送 100 次
-        //     for (int i = 0; i < 100; i++) {
-        //         sendRequest('T');
-        //         // 可选：极短的延时模拟真实高频但非瞬时的请求，或者注释掉测试极限粘包
-        //         // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
-        //     }
-        //     cout << "Sent 100 requests." << endl;
+        // case 2: // 获取时间
+        //     sendRequest('T');
         //     break;
-        // }
+case 2: // 获取时间
+        {
+            // 【Bonus 修改】自动发送 100 次请求
+            cout << "=== Starting 100 Requests Stress Test ===" << endl;
+            g_timeRespCount = 0; // 重置接收计数器
+            
+            for (int i = 0; i < 100; i++) {
+                sendRequest('T');
+                // 为了让 Wireshark 抓包更明显，也可以不加延时直接轰炸
+                // 如果服务器处理不过来，可以加一点点微小的延时：
+                // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
+            }
+            cout << ">>> Sent 100 requests. Waiting for responses..." << endl;
+            break;
+        }
         case 3: // 获取名字
             sendRequest('N');
             break;
