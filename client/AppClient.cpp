@@ -256,15 +256,16 @@ void AppClient::handleInput(int choice) {
         //     break;
 case 2: // 获取时间
         {
-            // 【Bonus 修改】自动发送 100 次请求
             cout << "=== Starting 100 Requests Stress Test ===" << endl;
-            g_timeRespCount = 0; // 重置接收计数器
+            g_timeRespCount = 0; 
             
             for (int i = 0; i < 100; i++) {
                 sendRequest('T');
-                // 为了让 Wireshark 抓包更明显，也可以不加延时直接轰炸
-                // 如果服务器处理不过来，可以加一点点微小的延时：
-                // std::this_thread::sleep_for(std::chrono::microseconds(100)); 
+                
+                // 【关键修改】每次发送后暂停 50 毫秒
+                // 100次 x 50ms = 持续约 5 秒
+                // 这样能保证 Client 1 还在发的时候，Client 2 肯定也加入进来了
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
             cout << ">>> Sent 100 requests. Waiting for responses..." << endl;
             break;

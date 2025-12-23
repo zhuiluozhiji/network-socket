@@ -4,6 +4,9 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <ctime>
+#include <thread>
+#include <chrono>
+
 
 using namespace std;
 
@@ -151,19 +154,24 @@ void TcpServer::dispatchMessage(int sock, NetMsg& msg, int clientId) {
     }
 }
 
-// 1. 处理时间
+// 在 server/TcpServer.cpp 中
+
+// 1. 处理时间请求
 void TcpServer::handleTimeReq(int sock, int clientId) {
     time_t now = time(0);
     tm* ltm = localtime(&now);
     char buf[64];
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ltm);
     
-    // 【新增日志】
+    // 【关键修改】模拟服务器处理耗时：休眠 20 毫秒
+    // 这能强有力地证明服务器在“同时”处理多个请求（多线程）
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    
+    // 打印日志
     cout << "[Server] Client " << clientId << " requested Time. Sending: " << buf << endl;
     
     sendMsg(sock, 'T', std::string(buf));
 }
-
 // 2. 处理名字
 // 2. 处理名字
 void TcpServer::handleNameReq(int sock, int clientId) {

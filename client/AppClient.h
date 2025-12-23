@@ -4,7 +4,9 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <chrono>
 #include "../common/NetMsg.h" // 引入公共协议头文件
+
 
 class AppClient {
 private:
